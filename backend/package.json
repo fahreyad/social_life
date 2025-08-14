@@ -1,0 +1,34 @@
+{
+  "name": "social_life",
+  "version": "1.0.0",
+  "description": "",
+  "homepage": "https://github.com/fahreyad/social_life#readme",
+  "bugs": {
+    "url": "https://github.com/fahreyad/social_life/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fahreyad/social_life.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "app.js",
+  "scripts": {
+    "dev": "nodemon --watch src --exec node --import 'data:text/javascript,import { register } from \"node:module\"; import { pathToFileURL } from \"node:url\"; register(\"ts-node/esm\", pathToFileURL(\"./\"));' src/app.ts",
+    "build": "tsc",
+    "start": "node dist/app.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.1",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/dotenv": "^6.1.1",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.2.1",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  }
+}
