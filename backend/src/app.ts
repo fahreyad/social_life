@@ -1,23 +1,97 @@
 import express, { Application, Request, Response,NextFunction } from "express";
+import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
 import auth from "./middlewares/auth.js"; // Importing the auth middleware
 import userAuth from "./middlewares/userAuth.js";
 import connectDB from "./config/database.js";
 import User from "./models/userModel.js";
+import { userValidationSchema } from "./utils/userValidation.js";
+import { loginValidationSchema } from "./utils/loginValidation.js";
+import jwt from "jsonwebtoken"
+import cookieParser from "cookie-parser";
 
 dotenv.config();
 const app: Application = express();
 const PORT: number = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
+app.use(cookieParser());
+
 
 // Routes
-app.post("/signup", userAuth, async(req: Request, res: Response) => {
-  // Registration logic here
-  const newUser = new User(req.body);
+app.post("/signup", userAuth, async (req: Request, res: Response) => {
+  // Validate request body
+  const { error, value } = userValidationSchema.validate(req.body, { abortEarly: false });
+  if (error) {
+    // Format error messages to be more API-friendly
+    const messages = error.details.map(detail => {
+      // Remove quotes and make message more readable
+      return detail.message.replace(/"/g, "").replace(/ is required$/, " is required field");
+    });
+    return res.status(400).json({ errors: messages });
+  }
+
+  // Check for existing user
+  const existingUser = await User.findOne({ email: value.email });
+  if (existingUser) {
+    return res.status(400).json({ error: "Email already exists" });
+  }
+
+  // Hash password before saving
+  const salt = await bcrypt.genSalt(10);
+  const hashedPassword = await bcrypt.hash(value.password, salt);
+  value.password = hashedPassword;
+
+  // Save new user
+  const newUser = new User(value);
   try {
     await newUser.save();
     res.status(201).json({ message: "User registered successfully" });
+  } catch (err: unknown) {
+    res.status(500).json({ error: "An unknown error occurred" });
+  }
+});
+
+app.post("/login", userAuth, async (req: Request, res: Response) => {
+  // Validate request body
+  const { error, value } = loginValidationSchema.validate(req.body, { abortEarly: false });
+  if (error) {
+    // Format error messages to be more API-friendly
+    const messages = error.details.map(detail => {
+      // Remove quotes and make message more readable
+      return detail.message.replace(/"/g, "").replace(/ is required$/, " is required field");
+    });
+    return res.status(400).json({ errors: messages });
+  }
+
+  // Check for existing user
+  const existingUser = await User.findOne({ email: value.email });
+  if (!existingUser) {
+    return res.status(400).json({ error: "Invalid credentials" });
+  }
+
+  // Check password
+  const isMatch = await bcrypt.compare(value.password, existingUser.password);
+  if (!isMatch) {
+    return res.status(400).json({ error: "Invalid credentials" });
+  }
+
+  // Generate and return JWT token
+  const token = jwt.sign({ _id: existingUser._id }, process.env.JWT_SECRET as string, { expiresIn: "1h" });
+  res.cookie("token", token, { httpOnly: true, path: "/" });
+  res.status(200).json({ message: "Login successful" });
+});
+
+app.get("/profile", userAuth, async (req: Request, res: Response) => {
+  const { token } = req.cookies; // Assuming userId is set by the userAuth middleware
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string);
+    const {_id} = decoded;
+    const user = await User.findById(_id);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.status(200).json(user);
   } catch (error: unknown) {
     if (error instanceof Error) {
       res.status(400).json({ error: error.message });
@@ -26,6 +100,7 @@ app.post("/signup", userAuth, async(req: Request, res: Response) => {
     }
   }
 });
+
 app.get("/feed", userAuth, async (req: Request, res: Response) => {
   // Feed retrieval logic here
   try {
@@ -140,6 +215,8 @@ app.use("/", (err: Error, req: Request, res: Response, next: NextFunction) => {
     res.status(500).send("Internal Server Error");
   } 
 })
+
+
 
 connectDB().then(() => {
   console.log("Connected to MongoDB");
