@@ -1,5 +1,21 @@
 import mongoose from "mongoose";
 import validator from 'validator';
+import jwt from "jsonwebtoken"
+import bcrypt from "bcryptjs";
+
+export interface IUser extends mongoose.Document {
+  firstName: string;
+  lastName: string;
+  email: string;
+  age: number;
+  gender: string;
+  photo: string;
+  bio: string;
+  skills: string[];
+  password: string;
+  jwtSign(): string;
+  passwordMatch(password: string): Promise<boolean>;
+}
 const userSchema = new mongoose.Schema(
     {
     firstName: { type: String, required: true, trim: true },
@@ -42,6 +58,20 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true },
 },{timestamps: true});
 
-const User = mongoose.model("User", userSchema);
+userSchema.methods.jwtSign = async function(): Promise<string> {
+    const token = await jwt.sign({ _id: this._id }, process.env.JWT_SECRET as string, { expiresIn: "1d" });
+    if(!token){
+        console.error("Error generating JWT token");
+        throw new Error("Internal server error");
+    }
+    console.log("JWT token generated successfully: " + token);
+    return token;
+};
+userSchema.methods.passwordMatch = async function(passwordFromInput:string): Promise<boolean> {
+    const isMatch = await bcrypt.compare(passwordFromInput, this.password);
+    return isMatch;
+};
+
+const User = mongoose.model<IUser>("User", userSchema);
 
 export default User;
